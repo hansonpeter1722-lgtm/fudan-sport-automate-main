@@ -40,6 +40,10 @@ if __name__ == '__main__':
             if route.id == args.route:
                 selected_route = route
 
+        if selected_route is None:
+            print(f"ERROR: 服务端没有返回路线 {args.route}，可用路线请运行 python main.py --view 查看")
+            exit(1)
+
         # delay random time, used in GitHub Action deployment
         if args.delay:
             sleep_time = random.randint(0, 240)

@@ -10,7 +10,9 @@ def get_routes():
     response = requests.get(route_url, params=params)
     data = json.loads(response.text)
     try:
-        route_data_list = filter(lambda route: route['points'] is not None and len(route['points']) == 1,
+        # 2026 起官方接口的田径场路线变成「起点 + 中点」两个点，原来只认单点导致所有场地被筛掉，
+        # 这里放宽为至少一个点（FudanRoute 只用 points[0] 作起点）。
+        route_data_list = filter(lambda route: route['points'] is not None and len(route['points']) >= 1,
                                  data['data']['list'])
         return [FudanRoute(route_data) for route_data in route_data_list]
     except:
