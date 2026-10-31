@@ -4,20 +4,40 @@ import json
 import os
 
 
+def _redact(text, limit=200):
+    """打日志时把 token/userid 抹掉，仓库是公开的，日志也是公开的。"""
+    out = str(text)[:limit]
+    for secret_name in ('FUDAN_SPORT_TOKEN', 'USER_ID'):
+        value = os.getenv(secret_name)
+        if value:
+            out = out.replace(value, '***')
+    return out
+
+
+def _fail(message, response=None):
+    extra = ''
+    if response is not None:
+        extra = f" (http={response.status_code}, body={_redact(response.text)!r})"
+    print(f"ERROR: {message}{extra}")
+    exit(1)
+
+
 def get_routes():
     route_url = 'https://sport.fudan.edu.cn/sapi/route/list'
     params = {'userid': os.getenv('USER_ID'), 'token': os.getenv('FUDAN_SPORT_TOKEN')}
-    response = requests.get(route_url, params=params)
-    data = json.loads(response.text)
+    response = requests.get(route_url, params=params, timeout=30)
+    try:
+        data = json.loads(response.text)
+    except Exception:
+        _fail('路线列表返回的不是 JSON', response)
     try:
         # 2026 起官方接口的田径场路线变成「起点 + 中点」两个点，原来只认单点导致所有场地被筛掉，
         # 这里放宽为至少一个点（FudanRoute 只用 points[0] 作起点）。
         route_data_list = filter(lambda route: route['points'] is not None and len(route['points']) >= 1,
                                  data['data']['list'])
         return [FudanRoute(route_data) for route_data in route_data_list]
-    except:
-        print(f"ERROR: {data['message']}")
-        exit(1)
+    except Exception:
+        _fail(data.get('message', '取路线列表失败'), response)
 
 def default_env(name, default):
     if os.getenv(name) is None or os.getenv(name).strip() == '':
@@ -44,13 +64,12 @@ class FudanAPI:
                   'device': self.device,
                   'lng': self.route.start_point.longitude,
                   'lat': self.route.start_point.latitude}
-        response = requests.get(start_url, params=params)
+        response = requests.get(start_url, params=params, timeout=30)
         data = json.loads(response.text)
         try:
             self.run_id = data['data']['run_id']
-        except:
-            print(f"ERROR: {data['message']}")
-            exit(1)
+        except Exception:
+            _fail(data.get('message', '开始跑步失败'), response)
 
     def update(self, point):
         update_url = 'https://sport.fudan.edu.cn/sapi/run/point'
